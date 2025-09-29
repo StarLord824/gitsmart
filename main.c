@@ -129,9 +129,14 @@ int is_git_repository() {
 // ==================== COMMIT ANALYSIS ====================
 
 void load_commit_history() {
+    // Use Windows-compatible git log format
+    #ifdef _WIN32
+    char *output = run_git_command_output("git log --oneline -1000");
+    #else
     char *output = run_git_command_output("git log --oneline --format=\"%%H %%an %%ad %%s\" --date=short -1000");
+    #endif
+    
     if (!output) {
-        printf("Failed to get commit history\n");
         return;
     }
 
@@ -139,6 +144,56 @@ void load_commit_history() {
     while (line && commit_count < MAX_COMMITS) {
         commit_info_t *commit = &commits[commit_count];
         
+        #ifdef _WIN32
+        // Windows: just get hash and message
+        char *hash = strtok(line, " ");
+        char *message = strtok(NULL, "\n");
+        
+        if (hash && message) {
+            strncpy(commit->hash, hash, 40);
+            commit->hash[40] = '\0';
+            
+            // Get author and date separately
+            char *details = run_git_command_output("git show -s --format=%%an|%%ad --date=short %s", hash);
+            if (details) {
+                char *author = strtok(details, "|");
+                char *date = strtok(NULL, "|");
+                if (author) strncpy(commit->author, author, 255);
+                if (date) strncpy(commit->date, date, 63);
+            }
+            
+            strncpy(commit->message, message, 511);
+            commit->message[511] = '\0';
+            
+            // Get stats
+            char *stats = run_git_command_output("git show --stat %s", hash);
+            if (stats) {
+                commit->files_changed = 0;
+                commit->insertions = 0;
+                commit->deletions = 0;
+                
+                char *stat_line = strtok(stats, "\n");
+                while (stat_line) {
+                    if (strstr(stat_line, "file") != NULL && strstr(stat_line, "changed")) {
+                        // Simple parsing for Windows
+                        char *p = stat_line;
+                        while (*p) {
+                            if (isdigit(*p)) {
+                                commit->files_changed = atoi(p);
+                                break;
+                            }
+                            p++;
+                        }
+                        break;
+                    }
+                    stat_line = strtok(NULL, "\n");
+                }
+            }
+            
+            commit_count++;
+        }
+        #else
+        // Unix version (original)
         char *hash = strtok(line, " ");
         char *author = strtok(NULL, " ");
         char *date = strtok(NULL, " ");
@@ -177,24 +232,6 @@ void load_commit_history() {
                             }
                             commit->files_changed = atoi(num_start);
                         }
-                        
-                        char *insertions_ptr = strstr(stat_line, "insertion");
-                        if (insertions_ptr) {
-                            char *num_start = insertions_ptr;
-                            while (num_start > stat_line && (isdigit(*(num_start-1)) || *(num_start-1) == '+' || *(num_start-1) == '-')) {
-                                num_start--;
-                            }
-                            commit->insertions = atoi(num_start);
-                        }
-                        
-                        char *deletions_ptr = strstr(stat_line, "deletion");
-                        if (deletions_ptr) {
-                            char *num_start = deletions_ptr;
-                            while (num_start > stat_line && (isdigit(*(num_start-1)) || *(num_start-1) == '+' || *(num_start-1) == '-')) {
-                                num_start--;
-                            }
-                            commit->deletions = atoi(num_start);
-                        }
                         break;
                     }
                     stat_line = strtok(NULL, "\n");
@@ -203,6 +240,7 @@ void load_commit_history() {
             
             commit_count++;
         }
+        #endif
         line = strtok(NULL, "\n");
     }
 }
@@ -213,7 +251,7 @@ void show_commit_summary() {
     printf("Total commits: %d\n", commit_count);
     
     if (commit_count == 0) {
-        printf("No commit history found. Make sure you have commits in your repository.\n\n");
+        printf("No commit history found.\n\n");
         return;
     }
     
@@ -244,19 +282,20 @@ void show_commit_summary() {
         }
     }
     
-    int max_commits = 0;
-    char top_author[256] = "";
-    for (int i = 0; i < author_count; i++) {
-        if (author_counts[i] > max_commits) {
-            max_commits = author_counts[i];
-            strcpy(top_author, authors[i]);
+    if (author_count > 0) {
+        int max_commits = 0;
+        char top_author[256] = "";
+        for (int i = 0; i < author_count; i++) {
+            if (author_counts[i] > max_commits) {
+                max_commits = author_counts[i];
+                strcpy(top_author, authors[i]);
+            }
         }
+        printf("Most active author: %s (%d commits)\n", top_author, max_commits);
     }
     
-    printf("Most active author: %s (%d commits)\n", top_author, max_commits);
-    
     if (commit_count > 0) {
-        printf("Latest commit: %s by %s\n", commits[0].date, commits[0].author);
+        printf("Latest commit: %s\n", commits[0].message);
     }
     printf("\n");
 }
@@ -266,7 +305,6 @@ void show_commit_summary() {
 void load_branch_info() {
     char *output = run_git_command_output("git branch -v");
     if (!output) {
-        printf("Failed to get branch information\n");
         return;
     }
 
@@ -284,14 +322,6 @@ void load_branch_info() {
             size_t name_len = name_end - ptr;
             strncpy(branch->name, ptr, name_len);
             branch->name[name_len] = '\0';
-            
-            const char *commit_ptr = name_end;
-            while (*commit_ptr && *commit_ptr == ' ') commit_ptr++;
-            
-            if (strlen(commit_ptr) >= 7) {
-                strncpy(branch->last_commit, commit_ptr, 7);
-                branch->last_commit[7] = '\0';
-            }
             
             branch->is_merged = 0;
             if (strcmp(branch->name, "main") != 0 && strcmp(branch->name, "master") != 0) {
@@ -376,7 +406,6 @@ void show_branch_analysis() {
 void load_file_analysis() {
     char *output = run_git_command_output("git ls-files");
     if (!output) {
-        printf("Failed to get file list\n");
         return;
     }
 
@@ -386,29 +415,26 @@ void load_file_analysis() {
         strncpy(file->path, line, MAX_PATH_LENGTH - 1);
         file->path[MAX_PATH_LENGTH - 1] = '\0';
         
+        // Windows-compatible change counting
+        #ifdef _WIN32
         char cmd[512];
         snprintf(cmd, sizeof(cmd), "git log --oneline -- \"%s\" | find /c /v \"\"", line);
-        #ifndef _WIN32
-        snprintf(cmd, sizeof(cmd), "git log --oneline -- \"%s\" | wc -l", line);
-        #endif
-        
         char *changes_output = run_git_command_output(cmd);
         if (changes_output) {
             file->changes = atoi(changes_output);
         } else {
             file->changes = 1;
         }
-        
-        snprintf(cmd, sizeof(cmd), "git log -1 --format=%%an -- \"%s\"", line);
-        char *author = run_git_command_output(cmd);
-        if (author) {
-            strncpy(file->last_author, author, 255);
-            file->last_author[255] = '\0';
-            char *newline = strchr(file->last_author, '\n');
-            if (newline) *newline = '\0';
+        #else
+        char cmd[512];
+        snprintf(cmd, sizeof(cmd), "git log --oneline -- \"%s\" | wc -l", line);
+        char *changes_output = run_git_command_output(cmd);
+        if (changes_output) {
+            file->changes = atoi(changes_output);
         } else {
-            strcpy(file->last_author, "Unknown");
+            file->changes = 1;
         }
+        #endif
         
         file_count++;
         line = strtok(NULL, "\n");
@@ -437,7 +463,7 @@ void show_hot_files() {
     int count = (file_count < 10) ? file_count : 10;
     printf("Top %d most frequently changed files:\n", count);
     for (int i = 0; i < count; i++) {
-        printf("%3d changes: %s (last by: %s)\n", files[i].changes, files[i].path, files[i].last_author);
+        printf("%3d changes: %s\n", files[i].changes, files[i].path);
     }
     printf("\n");
 }
@@ -454,8 +480,8 @@ void smart_blame(const char *filepath) {
     printf("==========================================\n");
     
     char *output = run_git_command_output("git blame -s \"%s\"", filepath);
-    if (!output) {
-        printf("Failed to get blame information\n");
+    if (!output || strlen(output) == 0) {
+        printf("No blame information available.\n\n");
         return;
     }
     
@@ -475,9 +501,15 @@ void smart_blame(const char *filepath) {
                 strncpy(author, author_start, author_end - author_start);
                 author[author_end - author_start] = '\0';
                 
+                #ifdef _WIN32
                 char msg_cmd[256];
                 snprintf(msg_cmd, sizeof(msg_cmd), "git show -s --format=%%s %s", hash);
                 char *message = run_git_command_output(msg_cmd);
+                #else
+                char msg_cmd[256];
+                snprintf(msg_cmd, sizeof(msg_cmd), "git show -s --format=%%s %s", hash);
+                char *message = run_git_command_output(msg_cmd);
+                #endif
                 
                 if (message) {
                     message[strcspn(message, "\n")] = 0;
@@ -705,7 +737,8 @@ void run_security_audit() {
     printf("🛡️  Security Audit\n");
     printf("=================\n");
     
-    char* diff_output = run_git_command_output("git diff HEAD~10");
+    // Use HEAD~1 instead of HEAD~10 for Windows compatibility
+    char* diff_output = run_git_command_output("git diff HEAD~1");
     if (!diff_output || strlen(diff_output) == 0) {
         printf("No recent changes to audit.\n\n");
         return;
@@ -763,23 +796,15 @@ void analyze_change_impact(const char* target) {
     if (access(target, F_OK) == 0) {
         printf("Analyzing impact of changes to file: %s\n\n", target);
         
-        char* commits = run_git_command_output("git log --oneline --follow -- \"%s\" | head -5", target);
+        char* commits = run_git_command_output("git log --oneline --follow -- \"%s\"", target);
         if (commits && strlen(commits) > 0) {
             printf("Recent changes to this file:\n");
             char* line = strtok(commits, "\n");
-            while (line) {
+            int count = 0;
+            while (line && count < 5) {
                 printf("  • %s\n", line);
                 line = strtok(NULL, "\n");
-            }
-        }
-        
-        char* related = run_git_command_output("git log --name-only --oneline -- \"%s\" | grep -v \"^[a-f0-9]\" | sort | uniq -c | sort -rn | head -5", target);
-        if (related && strlen(related) > 0) {
-            printf("\nFrequently changed together:\n");
-            char* line = strtok(related, "\n");
-            while (line) {
-                printf("  • %s\n", line);
-                line = strtok(NULL, "\n");
+                count++;
             }
         }
     } else {
@@ -839,29 +864,31 @@ void detect_performance_regressions() {
     printf("⚡ Performance Regression Detection\n");
     printf("==================================\n");
     
-    char* large_commits = run_git_command_output("git log --oneline --numstat -20 | awk '/^[a-f0-9]/ { commit=$1 } /^[0-9]/ { added+=$1; deleted+=$2 } END { print \"Recent changes: +\" added \" -\" deleted \" lines\" }'");
-    if (large_commits) {
-        printf("Line changes in recent commits:\n");
-        printf("  %s\n", large_commits);
-    }
-    
-    char* large_files = run_git_command_output("git ls-tree -r -l HEAD | sort -n -k4 | tail -3");
-    if (large_files && strlen(large_files) > 0) {
-        printf("\nLargest files in repository (potential performance concerns):\n");
-        char* line = strtok(large_files, "\n");
+    // Windows-compatible performance analysis
+    char* recent_commits = run_git_command_output("git log --oneline -5");
+    if (recent_commits && strlen(recent_commits) > 0) {
+        printf("Recent commits (watch for large changes):\n");
+        char* line = strtok(recent_commits, "\n");
         while (line) {
             printf("  • %s\n", line);
             line = strtok(NULL, "\n");
         }
     }
     
-    char* complex_files = run_git_command_output("git ls-files | grep -E '\\.(c|cpp|java|py|js)$' | head -5");
-    if (complex_files && strlen(complex_files) > 0) {
-        printf("\nKey source files to monitor for performance:\n");
-        char* line = strtok(complex_files, "\n");
-        while (line) {
+    #ifdef _WIN32
+    char* large_files = run_git_command_output("git ls-tree -r -l HEAD | sort /R");
+    #else
+    char* large_files = run_git_command_output("git ls-tree -r -l HEAD | sort -n -k4 | tail -3");
+    #endif
+    
+    if (large_files && strlen(large_files) > 0) {
+        printf("\nFiles to monitor for size (potential performance concerns):\n");
+        char* line = strtok(large_files, "\n");
+        int count = 0;
+        while (line && count < 3) {
             printf("  • %s\n", line);
             line = strtok(NULL, "\n");
+            count++;
         }
     }
     
@@ -869,7 +896,7 @@ void detect_performance_regressions() {
     printf("• Monitor file size growth over time\n");
     printf("• Watch for large binary files in repo\n");
     printf("• Consider git-lfs for large assets\n");
-    printf("• Profile hot files identified earlier\n\n");
+    printf("• Use profilers for performance-critical code\n\n");
 }
 
 // ==================== DOCUMENTATION GAP FINDER ====================
@@ -878,36 +905,41 @@ void find_documentation_gaps() {
     printf("📚 Documentation Gap Analysis\n");
     printf("============================\n");
     
-    char* readme = run_git_command_output("ls README* 2>/dev/null | head -1");
+    // Windows-compatible README detection
     #ifdef _WIN32
-    readme = run_git_command_output("dir README* 2>NUL | findstr README");
+    char* readme = run_git_command_output("dir README* 2>NUL");
+    if (readme && strstr(readme, "README")) {
+        printf("✅ README file found\n");
+    } else {
+        printf("❌ No README file found - consider adding project documentation\n");
+    }
+    #else
+    char* readme = run_git_command_output("ls README* 2>/dev/null | head -1");
+    if (readme && strlen(readme) > 0) {
+        printf("✅ README file found: %s\n", readme);
+    } else {
+        printf("❌ No README file found - consider adding project documentation\n");
+    }
     #endif
     
-    if (!readme || strlen(readme) == 0) {
-        printf("❌ No README file found - consider adding project documentation\n");
-    } else {
-        printf("✅ README file found: %s\n", readme);
-    }
-    
-    char* recent_code_changes = run_git_command_output("git log --oneline -10 -- \"*.c\" \"*.cpp\" \"*.java\" \"*.py\" \"*.js\"");
-    char* recent_doc_changes = run_git_command_output("git log --oneline -10 -- \"*.md\" \"*.txt\" \"README*\" \"docs/*\"");
-    
-    if (recent_code_changes && strlen(recent_code_changes) > 0) {
-        int code_commits = 0;
-        char* line = strtok(recent_code_changes, "\n");
-        while (line) { code_commits++; line = strtok(NULL, "\n"); }
-        
+    char* recent_commits = run_git_command_output("git log --oneline -10");
+    if (recent_commits && strlen(recent_commits) > 0) {
+        int total_commits = 0;
         int doc_commits = 0;
-        if (recent_doc_changes) {
-            line = strtok(recent_doc_changes, "\n");
-            while (line) { doc_commits++; line = strtok(NULL, "\n"); }
+        
+        char* line = strtok(recent_commits, "\n");
+        while (line) {
+            total_commits++;
+            if (strstr(line, "doc") || strstr(line, "readme") || strstr(line, "Documentation")) {
+                doc_commits++;
+            }
+            line = strtok(NULL, "\n");
         }
         
-        printf("\nRecent activity:\n");
-        printf("  Code commits: %d\n", code_commits);
-        printf("  Documentation commits: %d\n", doc_commits);
+        printf("\nDocumentation activity in last %d commits: %d doc-related commits\n", 
+               total_commits, doc_commits);
         
-        if (doc_commits < code_commits / 3) {
+        if (doc_commits < total_commits / 4) {
             printf("⚠️  Documentation may be lagging behind code changes\n");
         }
     }
