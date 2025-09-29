@@ -403,7 +403,8 @@ void show_branch_analysis() {
 
 // ==================== FILE ANALYSIS ====================
 
-void load_file_analysis() {
+void load_file_analysis() 
+{
     char *output = run_git_command_output("git ls-files");
     if (!output) {
         return;
@@ -441,7 +442,8 @@ void load_file_analysis() {
     }
 }
 
-void show_hot_files() {
+void show_hot_files() 
+{
     printf("🔥 Frequently Changed Files\n");
     printf("===========================\n");
     
@@ -470,7 +472,8 @@ void show_hot_files() {
 
 // ==================== SMART BLAME ====================
 
-void smart_blame(const char *filepath) {
+void smart_blame(const char *filepath) 
+{
     if (access(filepath, R_OK) != 0) {
         printf("❌ File not found or not readable: %s\n", filepath);
         return;
@@ -531,7 +534,8 @@ void smart_blame(const char *filepath) {
 
 // ==================== CLEANUP SUGGESTIONS ====================
 
-void show_cleanup_suggestions() {
+void show_cleanup_suggestions() 
+{
     printf("🧹 Cleanup Suggestions\n");
     printf("=====================\n");
     
@@ -571,7 +575,8 @@ void show_cleanup_suggestions() {
 
 // ==================== AI COMMIT SUGGESTIONS ====================
 
-void analyze_changes_for_commit_type(char* diff_output, char* type, char* description) {
+void analyze_changes_for_commit_type(char* diff_output, char* type, char* description) 
+{
     if (strstr(diff_output, "+++ b/") && strstr(diff_output, "--- /dev/null")) {
         strcpy(type, "feat");
         strcpy(description, "add new feature");
@@ -593,7 +598,8 @@ void analyze_changes_for_commit_type(char* diff_output, char* type, char* descri
     }
 }
 
-char* extract_commit_subject(char* diff_output) {
+char* extract_commit_subject(char* diff_output) 
+{
     static char subject[200];
     strcpy(subject, "implement changes");
     
@@ -622,7 +628,8 @@ char* extract_commit_subject(char* diff_output) {
     return subject;
 }
 
-int extract_key_changes(char* diff_output, char* output) {
+int extract_key_changes(char* diff_output, char* output) 
+{
     strcpy(output, "code changes");
     
     if (strstr(diff_output, "TODO") || strstr(diff_output, "FIXME")) {
@@ -641,7 +648,8 @@ int extract_key_changes(char* diff_output, char* output) {
     return 0;
 }
 
-void generate_commit_suggestions() {
+void generate_commit_suggestions() 
+{
     printf("🤖 AI Commit Message Suggestions\n");
     printf("===============================\n");
     
@@ -679,7 +687,8 @@ void generate_commit_suggestions() {
 
 // ==================== CODE REVIEW HELPER ====================
 
-void generate_review_checklist() {
+void generate_review_checklist() 
+{
     printf("🔍 Code Review Checklist\n");
     printf("=======================\n");
     
@@ -733,7 +742,8 @@ void generate_review_checklist() {
 
 // ==================== SECURITY AUDIT ====================
 
-void run_security_audit() {
+void run_security_audit() 
+{
     printf("🛡️  Security Audit\n");
     printf("=================\n");
     
@@ -784,7 +794,8 @@ void run_security_audit() {
 
 // ==================== CHANGE IMPACT ANALYZER ====================
 
-void analyze_change_impact(const char* target) {
+void analyze_change_impact(const char* target) 
+{
     printf("📈 Change Impact Analysis: %s\n", target);
     printf("==============================\n");
     
@@ -817,7 +828,8 @@ void analyze_change_impact(const char* target) {
 
 // ==================== INTERACTIVE CONFLICT RESOLVER ====================
 
-void interactive_conflict_resolver() {
+void interactive_conflict_resolver() 
+{
     printf("🔄 Interactive Conflict Resolver\n");
     printf("===============================\n");
     
@@ -860,7 +872,8 @@ void interactive_conflict_resolver() {
 
 // ==================== PERFORMANCE REGRESSION DETECTOR ====================
 
-void detect_performance_regressions() {
+void detect_performance_regressions() 
+{
     printf("⚡ Performance Regression Detection\n");
     printf("==================================\n");
     
@@ -899,9 +912,149 @@ void detect_performance_regressions() {
     printf("• Use profilers for performance-critical code\n\n");
 }
 
+// ==================== WORKFLOW OPTIMIZER ====================
+
+void analyze_workflow_patterns() 
+{
+    printf("🚀 Git Workflow Optimizer\n");
+    printf("========================\n");
+    
+    // Analyze commit frequency and patterns
+    char* commit_times = run_git_command_output("git log --format=%%ad --date=iso-strict -100");
+    if (!commit_times || strlen(commit_times) == 0) {
+        printf("Not enough commit history for workflow analysis.\n\n");
+        return;
+    }
+    
+    int total_commits = 0;
+    char* line = strtok(commit_times, "\n");
+    while (line) { total_commits++; line = strtok(NULL, "\n"); }
+    
+    printf("📊 Workflow Analysis (%d recent commits):\n\n", total_commits);
+    
+    // Check commit size patterns
+    char* large_commits = run_git_command_output("git log --oneline --numstat -20 | grep -E \"^[0-9]+\" | awk '{sum+=$1+$2} END {print sum}'");
+    if (large_commits) {
+        int total_changes = atoi(large_commits);
+        int avg_changes = total_commits > 0 ? total_changes / total_commits : 0;
+        printf("• Average changes per commit: %d lines\n", avg_changes);
+        if (avg_changes > 500) printf("  ⚠️  Consider smaller, more focused commits\n");
+        else if (avg_changes < 10) printf("  ⚠️  Very small commits - consider batching related changes\n");
+        else printf("  ✅ Good commit size balance\n");
+    }
+    
+    // Check time between commits
+    char* recent_dates = run_git_command_output("git log --format=%%ad --date=iso-strict -5 | head -5");
+    if (recent_dates && strchr(recent_dates, 'T')) {
+        printf("• Recent commit frequency: ");
+        int line_count = 0;
+        char* date_line = strtok(recent_dates, "\n");
+        while (date_line && line_count < 3) {
+            // Extract just the date part for simplicity
+            char* date_part = strtok(date_line, "T");
+            if (date_part) printf("%s ", date_part);
+            date_line = strtok(NULL, "\n");
+            line_count++;
+        }
+        printf("\n");
+    }
+    
+    // Check branch lifespan
+    char* branch_ages = run_git_command_output("git for-each-ref --format='%%(refname:short)|%%(committerdate:relative)' refs/heads/");
+    if (branch_ages) {
+        printf("• Branch activity:\n");
+        char* branch_line = strtok(branch_ages, "\n");
+        int old_branches = 0;
+        while (branch_line) {
+            char* name = strtok(branch_line, "|");
+            char* age = strtok(NULL, "|");
+            if (name && age && strstr(age, "week") && strcmp(name, "main") != 0 && strcmp(name, "master") != 0) {
+                old_branches++;
+                if (old_branches == 1) printf("  ⏰ Old branches needing attention:\n");
+                printf("    - %s (%s)\n", name, age);
+            }
+            branch_line = strtok(NULL, "\n");
+        }
+        if (old_branches == 0) printf("  ✅ No stale branches found\n");
+    }
+    
+    // Check merge vs rebase patterns
+    char* merge_commits = run_git_command_output("git log --oneline --merges -10 | wc -l");
+    char* total_recent = run_git_command_output("git log --oneline -20 | wc -l");
+    if (merge_commits && total_recent) {
+        int merges = atoi(merge_commits);
+        int total = atoi(total_recent);
+        if (total > 0) {
+            int merge_percentage = (merges * 100) / total;
+            printf("• Merge strategy: %d%% merge commits in recent history\n", merge_percentage);
+            if (merge_percentage > 50) printf("  💡 Consider using rebase for cleaner history\n");
+            else printf("  ✅ Good merge/rebase balance\n");
+        }
+    }
+    
+    // Generate personalized recommendations
+    printf("\n🎯 Workflow Recommendations:\n");
+    
+    char* current_branch = run_git_command_output("git branch --show-current");
+    if (current_branch && strcmp(current_branch, "main") != 0 && strcmp(current_branch, "master") != 0) {
+        char* branch_age = run_git_command_output("git log -1 --format=%%cr origin/main..HEAD");
+        if (branch_age && strlen(branch_age) > 0) {
+            printf("1. Feature branch '%s' is %s old - consider merging soon\n", current_branch, branch_age);
+        }
+    }
+    
+    char* unstaged = run_git_command_output("git status --porcelain | grep -v \"^??\" | wc -l");
+    if (unstaged && atoi(unstaged) > 5) {
+        printf("2. You have %s uncommitted changes - consider smaller, more frequent commits\n", unstaged);
+    }
+    
+    char* remote_branches = run_git_command_output("git branch -r | wc -l");
+    char* local_branches = run_git_command_output("git branch | wc -l");
+    if (remote_branches && local_branches) {
+        int remote = atoi(remote_branches);
+        int local = atoi(local_branches);
+        if (remote > local * 2) {
+            printf("3. Many remote branches (%d remote vs %d local) - consider cleaning up\n", remote, local);
+        }
+    }
+    
+    printf("4. Run 'gitsmart review' before pushing changes\n");
+    printf("5. Use 'gitsmart suggest' for better commit messages\n");
+    
+    printf("\n");
+}
+
+// Add to main command handler
+void show_help_full() 
+{
+    printf("GitSmart - Intelligent Git Repository Analysis\n");
+    printf("=============================================\n");
+    printf("Usage: gitsmart [COMMAND] [OPTIONS]\n");
+    printf("\nCommands:\n");
+    printf("  analysis    Show comprehensive repository analysis (default)\n");
+    printf("  blame FILE  Show smart blame with commit context\n");
+    printf("  branches    Show branch analysis and cleanup suggestions\n");
+    printf("  hotfiles    Show most frequently changed files\n");
+    printf("  cleanup     Show cleanup suggestions\n");
+    printf("  suggest     AI-powered commit message suggestions\n");
+    printf("  review      Generate code review checklist\n");
+    printf("  security    Run security audit on recent changes\n");
+    printf("  impact TGT  Analyze change impact for file/component\n");
+    printf("  resolve     Interactive merge conflict resolver\n");
+    printf("  performance Detect potential performance regressions\n");
+    printf("  docs        Find documentation gaps\n");
+    printf("  workflow    Analyze and optimize git workflow patterns\n");  // NEW
+    printf("  help        Show this help message\n");
+    printf("\nExamples:\n");
+    printf("  gitsmart                    # Full analysis\n");
+    printf("  gitsmart workflow           # Workflow optimization\n");  // NEW
+    printf("  gitsmart suggest            # AI commit suggestions\n");
+}
+
 // ==================== DOCUMENTATION GAP FINDER ====================
 
-void find_documentation_gaps() {
+void find_documentation_gaps() 
+{
     printf("📚 Documentation Gap Analysis\n");
     printf("============================\n");
     
@@ -953,7 +1106,8 @@ void find_documentation_gaps() {
 
 // ==================== MAIN COMMAND HANDLER ====================
 
-void show_analysis() {
+void show_analysis() 
+{
     printf("\n");
     printf("🎯 GitSmart Analysis Report\n");
     printf("==========================\n\n");
@@ -968,7 +1122,8 @@ void show_analysis() {
     show_cleanup_suggestions();
 }
 
-void show_help_full() {
+void show_help_full() 
+{
     printf("GitSmart - Intelligent Git Repository Analysis\n");
     printf("=============================================\n");
     printf("Usage: gitsmart [COMMAND] [OPTIONS]\n");
@@ -998,7 +1153,8 @@ void show_help_full() {
 
 // ==================== MAIN FUNCTION ====================
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) 
+{
     if (!is_git_repository()) {
         printf("❌ Error: Not a git repository\n");
         printf("Run this command in a git repository\n");
@@ -1030,6 +1186,8 @@ int main(int argc, char *argv[]) {
             interactive_conflict_resolver();
         } else if (strcmp(argv[1], "performance") == 0) {
             detect_performance_regressions();
+        } else if(strcmp(argv[1], "workflow") == 0) {
+            analyze_workflow_patterns();
         } else if (strcmp(argv[1], "docs") == 0) {
             find_documentation_gaps();
         } else {
