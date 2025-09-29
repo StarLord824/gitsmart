@@ -118,7 +118,8 @@ char* run_git_command_output(const char *format, ...) {
     return output;
 }
 
-int is_git_repository() {
+int is_git_repository() 
+{
     #ifdef _WIN32
     return run_git_command("git rev-parse --git-dir") == 0;
     #else
@@ -128,7 +129,8 @@ int is_git_repository() {
 
 // ==================== COMMIT ANALYSIS ====================
 
-void load_commit_history() {
+void load_commit_history() 
+{
     // Use Windows-compatible git log format
     #ifdef _WIN32
     char *output = run_git_command_output("git log --oneline -1000");
@@ -356,7 +358,8 @@ void load_branch_info() {
     }
 }
 
-void show_branch_analysis() {
+void show_branch_analysis() 
+{
     printf("🌿 Branch Analysis\n");
     printf("=================\n");
     
